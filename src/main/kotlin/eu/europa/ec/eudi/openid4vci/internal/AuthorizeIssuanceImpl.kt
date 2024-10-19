@@ -56,7 +56,12 @@ internal class AuthorizeIssuanceImpl(
                     state,
                     issuerState,
                 ).getOrThrow()
-            AuthorizationRequestPrepared(authorizationCodeUrl, codeVerifier, state, configurationIds)
+            AuthorizationRequestPrepared(
+                authorizationCodeUrl,
+                codeVerifier,
+                state,
+                configurationIds,
+            )
         }
 
     private fun scopesAndCredentialConfigurationIds(): Pair<List<Scope>, List<CredentialConfigurationIdentifier>> {
@@ -71,7 +76,8 @@ internal class AuthorizeIssuanceImpl(
         for (id in credentialOffer.credentialConfigurationIdentifiers) {
             val credentialConfiguration = credentialConfigurationById(id)
             fun authDetailsByCfgId() = configurationIdentifiers.add(id)
-            fun addScope(): Boolean = credentialConfiguration.scope?.let { scopes.add(Scope(it)) } ?: false
+            fun addScope(): Boolean =
+                credentialConfiguration.scope?.let { scopes.add(Scope(it)) } ?: false
             when (config.authorizeIssuanceConfig) {
                 AuthorizeIssuanceConfig.AUTHORIZATION_DETAILS -> authDetailsByCfgId()
                 AuthorizeIssuanceConfig.FAVOR_SCOPES -> if (!addScope()) authDetailsByCfgId()
@@ -84,12 +90,18 @@ internal class AuthorizeIssuanceImpl(
         authorizationCode: AuthorizationCode,
         serverState: String,
         authDetailsOption: AccessTokenOption,
+        dPopNonce: String?,
     ): Result<AuthorizedRequest> =
         runCatching {
             ensure(serverState == state) { InvalidAuthorizationState() }
             val credConfigIdsAsAuthDetails = identifiersSentAsAuthDetails.filter(authDetailsOption)
             val tokenResponse =
-                tokenEndpointClient.requestAccessTokenAuthFlow(authorizationCode, pkceVerifier, credConfigIdsAsAuthDetails).getOrThrow()
+                tokenEndpointClient.requestAccessTokenAuthFlow(
+                    authorizationCode,
+                    pkceVerifier,
+                    credConfigIdsAsAuthDetails,
+                    dPopNonce,
+                ).getOrThrow()
             authorizedRequest(credentialOffer, tokenResponse)
         }
 
@@ -108,7 +120,11 @@ internal class AuthorizeIssuanceImpl(
             credentialOffer.credentialConfigurationIdentifiers.filter(authDetailsOption)
 
         val tokenResponse =
-            tokenEndpointClient.requestAccessTokenPreAuthFlow(preAuthorizedCode, txCode, credConfigIdsAsAuthDetails).getOrThrow()
+            tokenEndpointClient.requestAccessTokenPreAuthFlow(
+                preAuthorizedCode,
+                txCode,
+                credConfigIdsAsAuthDetails,
+            ).getOrThrow()
         authorizedRequest(credentialOffer, tokenResponse)
     }
 }
@@ -141,7 +157,8 @@ private fun authorizedRequest(
     tokenResponse: TokenResponse,
 ): AuthorizedRequest {
     val offerRequiresProofs = offer.credentialConfigurationIdentifiers.any {
-        val credentialConfiguration = offer.credentialIssuerMetadata.credentialConfigurationsSupported[it]
+        val credentialConfiguration =
+            offer.credentialIssuerMetadata.credentialConfigurationsSupported[it]
         credentialConfiguration != null && credentialConfiguration.proofTypesSupported.values.isNotEmpty()
     }
     val (accessToken, refreshToken, cNonce, authorizationDetails, timestamp) = tokenResponse
