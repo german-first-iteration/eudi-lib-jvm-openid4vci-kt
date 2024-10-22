@@ -181,6 +181,7 @@ interface RequestIssuance {
     suspend fun AuthorizedRequest.request(
         requestPayload: IssuanceRequestPayload,
         popSigners: List<PopSigner> = emptyList(),
+        dpopNonce: String? = null
     ): Result<AuthorizedRequestAnd<SubmissionOutcome>>
 }
 

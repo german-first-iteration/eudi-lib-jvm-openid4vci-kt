@@ -84,6 +84,7 @@ internal sealed interface TokenResponseTO {
                     cNonce = cNonce?.let { CNonce(it, cNonceExpiresIn) },
                     authorizationDetails = authorizationDetails ?: emptyMap(),
                     timestamp = clock.instant(),
+                    dpopNonce = dPopNonce
                 )
             }
 

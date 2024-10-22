@@ -113,6 +113,7 @@ sealed interface AuthorizedRequest : java.io.Serializable {
         val cNonce: CNonce,
         override val credentialIdentifiers: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>?,
         override val timestamp: Instant,
+        val dpopNonce: String? = null
     ) : AuthorizedRequest
 }
 

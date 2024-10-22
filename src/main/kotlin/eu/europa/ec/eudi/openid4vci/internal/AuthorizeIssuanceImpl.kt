@@ -32,6 +32,7 @@ internal data class TokenResponse(
     val cNonce: CNonce?,
     val authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>> = emptyMap(),
     val timestamp: Instant,
+    val dpopNonce: String?
 )
 
 internal class AuthorizeIssuanceImpl(
@@ -164,8 +165,7 @@ private fun authorizedRequest(
     val (accessToken, refreshToken, cNonce, authorizationDetails, timestamp) = tokenResponse
     return when {
         cNonce != null && offerRequiresProofs ->
-            ProofRequired(accessToken, refreshToken, cNonce, authorizationDetails, timestamp)
-
+            ProofRequired(accessToken, refreshToken, cNonce, authorizationDetails, timestamp, tokenResponse.dpopNonce)
         else ->
             NoProofRequired(accessToken, refreshToken, authorizationDetails, timestamp)
     }
