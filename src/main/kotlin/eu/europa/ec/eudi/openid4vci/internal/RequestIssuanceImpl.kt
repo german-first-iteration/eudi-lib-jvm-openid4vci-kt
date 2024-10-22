@@ -29,11 +29,12 @@ internal class RequestIssuanceImpl(
     override suspend fun AuthorizedRequest.request(
         requestPayload: IssuanceRequestPayload,
         popSigners: List<PopSigner>,
+        dpopNonce: String?,
     ): Result<AuthorizedRequestAnd<SubmissionOutcome>> = runCatching {
         //
         // Place the request
         //
-        val outcome = placeIssuanceRequest(accessToken) {
+        val outcome = placeIssuanceRequest(accessToken, dpopNonce) {
             val proofFactories = proofFactoriesForm(popSigners)
             buildRequest(requestPayload, proofFactories, credentialIdentifiers.orEmpty())
         }
@@ -54,7 +55,7 @@ internal class RequestIssuanceImpl(
                 outcome.isInvalidProof()
 
         suspend fun retry() =
-            updatedAuthorizedRequest.request(requestPayload, popSigners)
+            updatedAuthorizedRequest.request(requestPayload, popSigners, dpopNonce)
                 .getOrThrow()
                 .markInvalidProofIrrecoverable()
 
@@ -151,10 +152,11 @@ internal class RequestIssuanceImpl(
 
     private suspend fun placeIssuanceRequest(
         token: AccessToken,
+        dpopNonce: String?,
         issuanceRequestSupplier: suspend () -> CredentialIssuanceRequest,
     ): SubmissionOutcomeInternal {
         val req = issuanceRequestSupplier()
-        val res = credentialEndpointClient.placeIssuanceRequest(token, req)
+        val res = credentialEndpointClient.placeIssuanceRequest(token, req, dpopNonce)
         return res.getOrThrow()
     }
 }
