@@ -56,6 +56,7 @@ internal sealed interface TokenResponseTO {
         @SerialName(
             "authorization_details",
         ) val authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>? = null,
+        var dPopNonce: String? = null,
     ) : TokenResponseTO
 
     /**
@@ -138,6 +139,7 @@ internal class TokenEndpointClient(
         authorizationCode: AuthorizationCode,
         pkceVerifier: PKCEVerifier,
         credConfigIdsAsAuthDetails: List<CredentialConfigurationIdentifier> = emptyList(),
+        dPopNonce: String? = null,
     ): Result<TokenResponse> = runCatching {
         // Append authorization_details form param if needed
         val authDetails = credConfigIdsAsAuthDetails.takeIf { it.isNotEmpty() }?.let {
@@ -151,7 +153,7 @@ internal class TokenEndpointClient(
                 pkceVerifier = pkceVerifier,
                 authorizationDetails = authDetails,
             )
-        requestAccessToken(params)
+        requestAccessToken(params, dPopNonce)
     }
 
     /**
@@ -197,6 +199,7 @@ internal class TokenEndpointClient(
 
     private suspend fun requestAccessToken(
         params: Map<String, String>,
+        dPopNonce: String? = null,
     ): TokenResponse {
         val response = ktorHttpClientFactory().use { httpClient ->
             val formParameters = Parameters.build {
@@ -204,12 +207,14 @@ internal class TokenEndpointClient(
             }
             httpClient.submitForm(tokenEndpoint.toString(), formParameters) {
                 dPoPJwtFactory?.let { factory ->
-                    dpop(factory, tokenEndpoint, Htm.POST, accessToken = null, nonce = null)
+                    dpop(factory, tokenEndpoint, Htm.POST, accessToken = null, nonce = dPopNonce)
                 }
                 generateClientAttestationIfNeeded()?.let(::clientAttestationHeaders)
             }
         }
-        val responseTO = if (response.status.isSuccess()) response.body<TokenResponseTO.Success>()
+        val responseTO = if (response.status.isSuccess()) response.body<TokenResponseTO.Success>().also {
+            it.dPopNonce = response.headers["DPoP-Nonce"]
+        }
         else response.body<TokenResponseTO.Failure>()
         return responseTO.tokensOrFail(clock)
     }
