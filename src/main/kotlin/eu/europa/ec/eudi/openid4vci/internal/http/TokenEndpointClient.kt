@@ -56,7 +56,7 @@ internal sealed interface TokenResponseTO {
         @SerialName(
             "authorization_details",
         ) val authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>? = null,
-        val dPopNonce: String? = null,
+        var dPopNonce: String? = null,
     ) : TokenResponseTO
 
     /**
