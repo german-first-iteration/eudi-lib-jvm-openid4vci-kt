@@ -42,6 +42,7 @@ internal class CredentialEndpointClient(
      *
      * @param accessToken Access token authorizing the request
      * @param request The single credential issuance request
+     * @param dpopNonce Proof of possession authorizing the request
      * @return credential issuer's response
      */
     suspend fun placeIssuanceRequest(
