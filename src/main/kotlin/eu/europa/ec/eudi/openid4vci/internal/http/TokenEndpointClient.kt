@@ -214,8 +214,7 @@ internal class TokenEndpointClient(
             }
         }
         val responseTO = if (response.status.isSuccess()) response.body<TokenResponseTO.Success>().also {
-            val dPoPNonce = response.headers["DPoP-Nonce"] ?: throw IllegalStateException("No DPoP-Nonce received")
-            it.dPopNonce = dPoPNonce
+            it.dPopNonce = response.headers["DPoP-Nonce"]
         }
         else response.body<TokenResponseTO.Failure>()
         return responseTO.tokensOrFail(clock)
