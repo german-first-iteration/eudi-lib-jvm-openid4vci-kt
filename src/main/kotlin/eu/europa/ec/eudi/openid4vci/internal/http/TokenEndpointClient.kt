@@ -56,7 +56,7 @@ internal sealed interface TokenResponseTO {
         @SerialName(
             "authorization_details",
         ) val authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>? = null,
-        var dPopNonce: String? = null,
+        val dPopNonce: String? = null,
     ) : TokenResponseTO
 
     /**
@@ -84,6 +84,7 @@ internal sealed interface TokenResponseTO {
                     cNonce = cNonce?.let { CNonce(it, cNonceExpiresIn) },
                     authorizationDetails = authorizationDetails ?: emptyMap(),
                     timestamp = clock.instant(),
+                    dpopNonce = dPopNonce
                 )
             }
 
@@ -132,6 +133,7 @@ internal class TokenEndpointClient(
      * @param pkceVerifier  The code verifier that was used when submitting the Pushed Authorization Request.
      * @param credConfigIdsAsAuthDetails The list of [CredentialConfigurationIdentifier]s that have been passed to authorization server
      * as authorization details, part of a Rich Authorization Request.
+     * @param dPopNonce Proof of possession for authorization.
      * @return The result of the request as a pair of the access token and the optional c_nonce information returned
      *      from token endpoint.
      */
