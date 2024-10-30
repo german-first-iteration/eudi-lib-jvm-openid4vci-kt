@@ -56,7 +56,6 @@ internal sealed interface TokenResponseTO {
         @SerialName(
             "authorization_details",
         ) val authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>? = null,
-        var dPopNonce: String? = null,
     ) : TokenResponseTO
 
     /**
@@ -84,7 +83,6 @@ internal sealed interface TokenResponseTO {
                     cNonce = cNonce?.let { CNonce(it, cNonceExpiresIn) },
                     authorizationDetails = authorizationDetails ?: emptyMap(),
                     timestamp = clock.instant(),
-                    dpopNonce = dPopNonce
                 )
             }
 
@@ -133,7 +131,6 @@ internal class TokenEndpointClient(
      * @param pkceVerifier  The code verifier that was used when submitting the Pushed Authorization Request.
      * @param credConfigIdsAsAuthDetails The list of [CredentialConfigurationIdentifier]s that have been passed to authorization server
      * as authorization details, part of a Rich Authorization Request.
-     * @param dPopNonce Proof of possession for authorization.
      * @return The result of the request as a pair of the access token and the optional c_nonce information returned
      *      from token endpoint.
      */
@@ -141,8 +138,8 @@ internal class TokenEndpointClient(
         authorizationCode: AuthorizationCode,
         pkceVerifier: PKCEVerifier,
         credConfigIdsAsAuthDetails: List<CredentialConfigurationIdentifier> = emptyList(),
-        dPopNonce: String? = null,
-    ): Result<TokenResponse> = runCatching {
+        dpopNonce: Nonce?,
+    ): Result<Pair<TokenResponse, Nonce?>> = runCatching {
         // Append authorization_details form param if needed
         val authDetails = credConfigIdsAsAuthDetails.takeIf { it.isNotEmpty() }?.let {
             authorizationDetailsFormParam(credConfigIdsAsAuthDetails)
@@ -155,7 +152,7 @@ internal class TokenEndpointClient(
                 pkceVerifier = pkceVerifier,
                 authorizationDetails = authDetails,
             )
-        requestAccessToken(params, dPopNonce)
+        placeTokenRequest(params, dpopNonce)
     }
 
     /**
@@ -171,7 +168,8 @@ internal class TokenEndpointClient(
         preAuthorizedCode: PreAuthorizedCode,
         txCode: String?,
         credConfigIdsAsAuthDetails: List<CredentialConfigurationIdentifier> = emptyList(),
-    ): Result<TokenResponse> = runCatching {
+        dpopNonce: Nonce?,
+    ): Result<Pair<TokenResponse, Nonce?>> = runCatching {
         // Append authorization_details form param if needed
         val authDetails = credConfigIdsAsAuthDetails.takeIf { it.isNotEmpty() }?.let {
             authorizationDetailsFormParam(credConfigIdsAsAuthDetails)
@@ -183,7 +181,7 @@ internal class TokenEndpointClient(
                 txCode = txCode,
                 authorizationDetails = authDetails,
             )
-        requestAccessToken(params)
+        placeTokenRequest(params, dpopNonce)
     }
 
     /**
@@ -194,31 +192,58 @@ internal class TokenEndpointClient(
      * @return the token end point response, which will include a new [TokenResponse.accessToken] and possibly
      * a new [TokenResponse.refreshToken]
      */
-    suspend fun refreshAccessToken(refreshToken: RefreshToken): Result<TokenResponse> = runCatching {
+    suspend fun refreshAccessToken(
+        refreshToken: RefreshToken,
+        dpopNonce: Nonce?,
+    ): Result<Pair<TokenResponse, Nonce?>> = runCatching {
         val params = TokenEndpointForm.refreshAccessToken(client.id, refreshToken)
-        requestAccessToken(params)
+        placeTokenRequest(params, dpopNonce)
     }
 
-    private suspend fun requestAccessToken(
+    private suspend fun placeTokenRequest(
         params: Map<String, String>,
-        dPopNonce: String? = null,
-    ): TokenResponse {
-        val response = ktorHttpClientFactory().use { httpClient ->
-            val formParameters = Parameters.build {
-                params.entries.forEach { (k, v) -> append(k, v) }
-            }
-            httpClient.submitForm(tokenEndpoint.toString(), formParameters) {
-                dPoPJwtFactory?.let { factory ->
-                    dpop(factory, tokenEndpoint, Htm.POST, accessToken = null, nonce = dPopNonce)
+        dpopNonce: Nonce?,
+    ): Pair<TokenResponse, Nonce?> {
+        suspend fun requestInternal(
+            existingDpopNonce: Nonce?,
+            retried: Boolean,
+        ): Pair<TokenResponseTO, Nonce?> {
+            val response = ktorHttpClientFactory().use { httpClient ->
+                val formParameters = Parameters.build {
+                    params.entries.forEach { (k, v) -> append(k, v) }
                 }
-                generateClientAttestationIfNeeded()?.let(::clientAttestationHeaders)
+                httpClient.submitForm(tokenEndpoint.toString(), formParameters) {
+                    dPoPJwtFactory?.let { factory ->
+                        dpop(factory, tokenEndpoint, Htm.POST, accessToken = null, nonce = existingDpopNonce)
+                    }
+                    generateClientAttestationIfNeeded()?.let(::clientAttestationHeaders)
+                }
+            }
+
+            return when {
+                response.status.isSuccess() -> {
+                    val responseTO = response.body<TokenResponseTO.Success>()
+                    val newDopNonce = response.dpopNonce()
+                    responseTO to (newDopNonce ?: existingDpopNonce)
+                }
+
+                response.status == HttpStatusCode.BadRequest -> {
+                    val errorTO = response.body<TokenResponseTO.Failure>()
+                    val newDopNonce = response.dpopNonce()
+                    when {
+                        errorTO.error == "use_dpop_nonce" && newDopNonce != null && !retried -> {
+                            requestInternal(newDopNonce, true)
+                        }
+                        else -> errorTO to (newDopNonce ?: existingDpopNonce)
+                    }
+                }
+
+                else -> throw AccessTokenRequestFailed("Token request failed with ${response.status}", "N/A")
             }
         }
-        val responseTO = if (response.status.isSuccess()) response.body<TokenResponseTO.Success>().also {
-            it.dPopNonce = response.headers["DPoP-Nonce"]
-        }
-        else response.body<TokenResponseTO.Failure>()
-        return responseTO.tokensOrFail(clock)
+
+        val (responseTO, newDopNonce) = requestInternal(dpopNonce, false)
+        return responseTO.tokensOrFail(clock) to newDopNonce
     }
 
     private fun authorizationDetailsFormParam(

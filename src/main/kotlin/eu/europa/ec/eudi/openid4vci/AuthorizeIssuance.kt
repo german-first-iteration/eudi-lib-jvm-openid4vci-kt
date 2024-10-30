@@ -34,6 +34,7 @@ data class AuthorizationRequestPrepared(
     val pkceVerifier: PKCEVerifier,
     val state: String,
     val identifiersSentAsAuthDetails: List<CredentialConfigurationIdentifier>,
+    val dpopNonce: Nonce?,
 ) : java.io.Serializable
 
 /**
@@ -49,6 +50,8 @@ sealed interface AuthorizedRequest : java.io.Serializable {
     val refreshToken: RefreshToken?
     val credentialIdentifiers: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>?
     val timestamp: Instant
+    val authorizationServerDpopNonce: Nonce?
+    val resourceServerDpopNonce: Nonce?
 
     fun isAccessTokenExpired(at: Instant): Boolean = accessToken.isExpired(timestamp, at)
     fun isRefreshTokenExpiredOrMissing(at: Instant): Boolean = refreshToken?.isExpired(timestamp, at) ?: true
@@ -61,25 +64,42 @@ sealed interface AuthorizedRequest : java.io.Serializable {
      * @return The new state of the request.
      */
     fun withCNonce(cNonce: CNonce): ProofRequired =
-        ProofRequired(accessToken, refreshToken, cNonce, credentialIdentifiers, timestamp)
+        ProofRequired(
+            accessToken,
+            refreshToken,
+            cNonce = cNonce,
+            credentialIdentifiers,
+            timestamp,
+            authorizationServerDpopNonce = authorizationServerDpopNonce,
+            resourceServerDpopNonce = resourceServerDpopNonce,
+        )
 
     fun withRefreshedAccessToken(
         refreshedAccessToken: AccessToken,
         newRefreshToken: RefreshToken?,
         at: Instant,
+        newAuthorizationServerDpopNonce: Nonce?,
     ): AuthorizedRequest =
         when (this) {
             is NoProofRequired -> copy(
                 accessToken = refreshedAccessToken,
                 refreshToken = newRefreshToken ?: refreshToken,
                 timestamp = at,
+                authorizationServerDpopNonce = newAuthorizationServerDpopNonce,
             )
 
             is ProofRequired -> copy(
                 accessToken = refreshedAccessToken,
                 refreshToken = newRefreshToken ?: refreshToken,
                 timestamp = at,
+                authorizationServerDpopNonce = newAuthorizationServerDpopNonce,
             )
+        }
+
+    fun withResourceServerDpopNonce(newResourceServerDpopNonce: Nonce?): AuthorizedRequest =
+        when (this) {
+            is NoProofRequired -> copy(resourceServerDpopNonce = newResourceServerDpopNonce)
+            is ProofRequired -> copy(resourceServerDpopNonce = newResourceServerDpopNonce)
         }
 
     /**
@@ -89,12 +109,16 @@ sealed interface AuthorizedRequest : java.io.Serializable {
      * @param refreshToken Refresh token to refresh the access token, if needed
      * @param credentialIdentifiers authorization details, if provided by the token endpoint
      * @param timestamp the point in time of the authorization (when tokens were issued)
+     * @param authorizationServerDpopNonce Nonce value for DPoP provided by the Authorization Server
+     * @param resourceServerDpopNonce Nonce value for DPoP provided by the Resource Server
      */
     data class NoProofRequired(
         override val accessToken: AccessToken,
         override val refreshToken: RefreshToken?,
         override val credentialIdentifiers: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>?,
         override val timestamp: Instant,
+        override val authorizationServerDpopNonce: Nonce?,
+        override val resourceServerDpopNonce: Nonce?,
     ) : AuthorizedRequest
 
     /**
@@ -106,6 +130,8 @@ sealed interface AuthorizedRequest : java.io.Serializable {
      * @param cNonce Nonce value provided by issuer to be included in proof of holder's binding
      * @param credentialIdentifiers authorization details, if provided by the token endpoint
      * @param timestamp the point in time of the authorization (when tokens were issued)
+     * @param authorizationServerDpopNonce Nonce value for DPoP provided by the Authorization Server
+     * @param resourceServerDpopNonce Nonce value for DPoP provided by the Resource Server
      */
     data class ProofRequired(
         override val accessToken: AccessToken,
@@ -113,7 +139,8 @@ sealed interface AuthorizedRequest : java.io.Serializable {
         val cNonce: CNonce,
         override val credentialIdentifiers: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>?,
         override val timestamp: Instant,
-        val dpopNonce: String? = null
+        override val authorizationServerDpopNonce: Nonce?,
+        override val resourceServerDpopNonce: Nonce?,
     ) : AuthorizedRequest
 }
 
@@ -151,14 +178,12 @@ interface AuthorizeIssuance {
      * @param serverState The state returned from authorization server via front-channel
      * @param authDetailsOption Defines if upon access token request extra authorization details will be set to fine grain the
      * scope of the access token.
-     * @param dPopNonce The DPoP nonce used for proof-of-possession during the authorization.
      * @return an issuance request in authorized state
      */
     suspend fun AuthorizationRequestPrepared.authorizeWithAuthorizationCode(
         authorizationCode: AuthorizationCode,
         serverState: String,
         authDetailsOption: AccessTokenOption = AccessTokenOption.AsRequested,
-        dPopNonce: String? = null,
     ): Result<AuthorizedRequest>
 
     /**
