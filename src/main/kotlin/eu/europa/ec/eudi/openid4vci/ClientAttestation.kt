@@ -87,7 +87,7 @@ data class ClientAttestationPoPJWTSpec(
     val duration: Duration = 5.minutes,
     val typ: String? = null,
     val jwsSigner: JWSSigner,
-    val extraClaims: Map<String, Any> = emptyMap()
+    val extraClaims: Map<String, Any> = emptyMap(),
 ) {
     init {
         requireIsNotMAC(signingAlgorithm)
