@@ -17,9 +17,6 @@ package eu.europa.ec.eudi.openid4vci
 
 import com.nimbusds.jose.JWEAlgorithm
 import com.nimbusds.jose.jwk.Curve
-import eu.europa.ec.eudi.openid4vci.ParUsage.IfSupported
-import eu.europa.ec.eudi.openid4vci.ParUsage.Never
-import eu.europa.ec.eudi.openid4vci.ParUsage.Required
 import java.net.URI
 import java.time.Clock
 
