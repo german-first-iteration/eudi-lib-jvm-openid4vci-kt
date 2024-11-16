@@ -180,7 +180,7 @@ interface RequestIssuance {
      */
     suspend fun AuthorizedRequest.request(
         requestPayload: IssuanceRequestPayload,
-        popSigners: List<PopSigner> = emptyList()
+        popSigners: List<PopSigner> = emptyList(),
     ): Result<AuthorizedRequestAnd<SubmissionOutcome>>
 }
 
