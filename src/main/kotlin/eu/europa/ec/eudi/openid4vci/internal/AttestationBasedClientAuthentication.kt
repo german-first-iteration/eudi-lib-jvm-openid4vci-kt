@@ -22,15 +22,21 @@ import com.nimbusds.jose.util.JSONObjectUtils
 import com.nimbusds.jwt.JWTClaimsSet
 import com.nimbusds.jwt.SignedJWT
 import com.nimbusds.oauth2.sdk.id.JWTID
-import eu.europa.ec.eudi.openid4vci.*
-import io.ktor.client.request.*
+import eu.europa.ec.eudi.openid4vci.Client
+import eu.europa.ec.eudi.openid4vci.ClientAttestation
+import eu.europa.ec.eudi.openid4vci.ClientAttestationPoPBuilder
+import eu.europa.ec.eudi.openid4vci.ClientAttestationPoPJWT
+import eu.europa.ec.eudi.openid4vci.DeferredIssuerConfig
+import eu.europa.ec.eudi.openid4vci.OpenId4VCIConfig
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.header
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.net.URL
 import java.time.Clock
 import java.time.Instant
-import java.util.*
+import java.util.Date
 
 /**
  * Default implementation of [ClientAttestationPoPBuilder]
@@ -56,14 +62,21 @@ internal object DefaultClientAttestationPoPBuilder : ClientAttestationPoPBuilder
 
     private fun Client.Attested.popJwtClaimSet(authServerId: URL, now: Instant): JWTClaimsSet {
         fun randomJwtId() = JWTID().value
-        return JWTClaimsSet.Builder().apply {
+
+        val claimSet = JWTClaimsSet.Builder().apply {
             val exp = now.plusSeconds(popJwtSpec.duration.inWholeSeconds)
             issuer(id)
             jwtID(randomJwtId())
             issueTime(Date.from(now))
             expirationTime(Date.from(exp))
             audience(authServerId.toString())
-        }.build()
+        }
+
+        for (claim in popJwtSpec.extraClaims) {
+            claimSet.claim(claim.key, claim.value)
+        }
+
+        return claimSet.build()
     }
 }
 
