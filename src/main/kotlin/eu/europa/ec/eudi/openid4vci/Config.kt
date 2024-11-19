@@ -77,7 +77,6 @@ data class OpenId4VCIConfig(
     val parUsage: ParUsage = ParUsage.IfSupported,
     val clock: Clock = Clock.systemDefaultZone(),
 ) {
-
     constructor(
         clientId: ClientId,
         authFlowRedirectionURI: URI,
@@ -89,15 +88,37 @@ data class OpenId4VCIConfig(
         parUsage: ParUsage = ParUsage.IfSupported,
         clock: Clock = Clock.systemDefaultZone(),
     ) : this(
-        Client.Public(clientId),
-        authFlowRedirectionURI,
-        keyGenerationConfig,
-        credentialResponseEncryptionPolicy,
-        authorizeIssuanceConfig,
-        dPoPSigner,
-        clientAttestationPoPBuilder,
-        parUsage,
-        clock,
+        client = Client.Public(clientId),
+        authFlowRedirectionURI = authFlowRedirectionURI,
+        keyGenerationConfig = keyGenerationConfig,
+        credentialResponseEncryptionPolicy = credentialResponseEncryptionPolicy,
+        authorizeIssuanceConfig = authorizeIssuanceConfig,
+        dPoPSigner = dPoPSigner,
+        clientAttestationPoPBuilder = clientAttestationPoPBuilder,
+        parUsage = parUsage,
+        clock = clock,
+    )
+
+    constructor(
+        attestedClient: Client.Attested,
+        authFlowRedirectionURI: URI,
+        keyGenerationConfig: KeyGenerationConfig,
+        credentialResponseEncryptionPolicy: CredentialResponseEncryptionPolicy,
+        authorizeIssuanceConfig: AuthorizeIssuanceConfig = AuthorizeIssuanceConfig.FAVOR_SCOPES,
+        dPoPSigner: PopSigner.Jwt? = null,
+        clientAttestationPoPBuilder: ClientAttestationPoPBuilder = ClientAttestationPoPBuilder.Default,
+        parUsage: ParUsage = ParUsage.IfSupported,
+        clock: Clock = Clock.systemDefaultZone(),
+    ) : this(
+        client = attestedClient,
+        authFlowRedirectionURI = authFlowRedirectionURI,
+        keyGenerationConfig = keyGenerationConfig,
+        credentialResponseEncryptionPolicy = credentialResponseEncryptionPolicy,
+        authorizeIssuanceConfig = authorizeIssuanceConfig,
+        dPoPSigner = dPoPSigner,
+        clientAttestationPoPBuilder = clientAttestationPoPBuilder,
+        parUsage = parUsage,
+        clock = clock,
     )
 
     init {
@@ -164,7 +185,8 @@ data class KeyGenerationConfig(
         fun ecOnly(
             ecKeyCurve: Curve,
             supportedJWEAlgorithms: List<JWEAlgorithm> = JWEAlgorithm.Family.ECDH_ES.toList(),
-        ): KeyGenerationConfig = KeyGenerationConfig(EcConfig(ecKeyCurve, supportedJWEAlgorithms), null)
+        ): KeyGenerationConfig =
+            KeyGenerationConfig(EcConfig(ecKeyCurve, supportedJWEAlgorithms), null)
     }
 }
 
