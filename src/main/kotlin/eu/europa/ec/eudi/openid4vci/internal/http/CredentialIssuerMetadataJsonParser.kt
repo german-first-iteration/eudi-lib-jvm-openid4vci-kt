@@ -123,7 +123,11 @@ private data class MsdMdocCredentialTO(
                         claimObject.display?.map { displayObject ->
                             Claim.Display(
                                 displayObject.name,
-                                displayObject.locale?.let { languageTag -> Locale.forLanguageTag(languageTag) },
+                                displayObject.locale?.let { languageTag ->
+                                    Locale.forLanguageTag(
+                                        languageTag
+                                    )
+                                },
                             )
                         } ?: emptyList(),
                     )
@@ -191,7 +195,11 @@ private data class SdJwtVcCredentialTO(
                         it.display.orEmpty().map { displayObject ->
                             Claim.Display(
                                 displayObject.name,
-                                displayObject.locale?.let { languageTag -> Locale.forLanguageTag(languageTag) },
+                                displayObject.locale?.let { languageTag ->
+                                    Locale.forLanguageTag(
+                                        languageTag
+                                    )
+                                },
                             )
                         },
                     )
@@ -394,7 +402,12 @@ private data class CredentialIssuerMetadataTO(
             .ensureSuccess(::InvalidCredentialIssuerId)
 
         val authorizationServers = authorizationServers
-            ?.map { ensureHttpsUrl(it, CredentialIssuerMetadataValidationError::InvalidAuthorizationServer) }
+            ?.map {
+                ensureHttpsUrl(
+                    it,
+                    CredentialIssuerMetadataValidationError::InvalidAuthorizationServer
+                )
+            }
             ?: listOf(credentialIssuerIdentifier.value)
 
         val credentialEndpoint = CredentialIssuerEndpoint(credentialEndpoint)
@@ -412,19 +425,21 @@ private data class CredentialIssuerMetadataTO(
         ensure(credentialConfigurationsSupported.isNotEmpty()) {
             CredentialIssuerMetadataValidationError.CredentialsSupportedRequired()
         }
-        val credentialsSupported = credentialConfigurationsSupported.map { (id, credentialSupportedTO) ->
-            val credentialId = CredentialConfigurationIdentifier(id)
-            val credential = runCatching { credentialSupportedTO.toDomain() }
-                .ensureSuccess(CredentialIssuerMetadataValidationError::InvalidCredentialsSupported)
-            credentialId to credential
-        }.toMap()
+        val credentialsSupported =
+            credentialConfigurationsSupported.map { (id, credentialSupportedTO) ->
+                val credentialId = CredentialConfigurationIdentifier(id)
+                val credential = runCatching { credentialSupportedTO.toDomain() }
+                    .ensureSuccess(CredentialIssuerMetadataValidationError::InvalidCredentialsSupported)
+                credentialId to credential
+            }.toMap()
 
         val display = display?.map(DisplayTO::toDomain) ?: emptyList()
-        val batchIssuance = batchCredentialIssuance?.let {
-            runCatching { BatchCredentialIssuance.Supported(it.batchSize) }.ensureSuccess {
-                CredentialIssuerMetadataValidationError.InvalidBatchSize()
-            }
-        } ?: BatchCredentialIssuance.NotSupported
+        val batchIssuance = BatchCredentialIssuance.Supported(5)
+//            batchCredentialIssuance?.let {
+//            runCatching { BatchCredentialIssuance.Supported(it.batchSize) }.ensureSuccess {
+//                CredentialIssuerMetadataValidationError.InvalidBatchSize()
+//            }
+//        } ?: BatchCredentialIssuance.NotSupported
 
         return CredentialIssuerMetadata(
             credentialIssuerIdentifier,
@@ -442,13 +457,18 @@ private data class CredentialIssuerMetadataTO(
     private fun credentialResponseEncryption(): CredentialResponseEncryption {
         fun algsAndMethods(): SupportedEncryptionAlgorithmsAndMethods {
             requireNotNull(credentialResponseEncryption)
-            val encryptionAlgorithms = credentialResponseEncryption.algorithmsSupported.map { JWEAlgorithm.parse(it) }
-            val encryptionMethods = credentialResponseEncryption.methodsSupported.map { EncryptionMethod.parse(it) }
+            val encryptionAlgorithms =
+                credentialResponseEncryption.algorithmsSupported.map { JWEAlgorithm.parse(it) }
+            val encryptionMethods =
+                credentialResponseEncryption.methodsSupported.map { EncryptionMethod.parse(it) }
             return SupportedEncryptionAlgorithmsAndMethods(encryptionAlgorithms, encryptionMethods)
         }
         return when {
             credentialResponseEncryption == null -> CredentialResponseEncryption.NotSupported
-            credentialResponseEncryption.encryptionRequired -> CredentialResponseEncryption.Required(algsAndMethods())
+            credentialResponseEncryption.encryptionRequired -> CredentialResponseEncryption.Required(
+                algsAndMethods()
+            )
+
             else -> CredentialResponseEncryption.SupportedNotRequired(algsAndMethods())
         }
     }
