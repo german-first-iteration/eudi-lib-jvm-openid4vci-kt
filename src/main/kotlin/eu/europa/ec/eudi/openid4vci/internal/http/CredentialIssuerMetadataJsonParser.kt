@@ -125,7 +125,7 @@ private data class MsdMdocCredentialTO(
                                 displayObject.name,
                                 displayObject.locale?.let { languageTag ->
                                     Locale.forLanguageTag(
-                                        languageTag
+                                        languageTag,
                                     )
                                 },
                             )
@@ -197,7 +197,7 @@ private data class SdJwtVcCredentialTO(
                                 displayObject.name,
                                 displayObject.locale?.let { languageTag ->
                                     Locale.forLanguageTag(
-                                        languageTag
+                                        languageTag,
                                     )
                                 },
                             )
@@ -405,7 +405,7 @@ private data class CredentialIssuerMetadataTO(
             ?.map {
                 ensureHttpsUrl(
                     it,
-                    CredentialIssuerMetadataValidationError::InvalidAuthorizationServer
+                    CredentialIssuerMetadataValidationError::InvalidAuthorizationServer,
                 )
             }
             ?: listOf(credentialIssuerIdentifier.value)
@@ -466,7 +466,7 @@ private data class CredentialIssuerMetadataTO(
         return when {
             credentialResponseEncryption == null -> CredentialResponseEncryption.NotSupported
             credentialResponseEncryption.encryptionRequired -> CredentialResponseEncryption.Required(
-                algsAndMethods()
+                algsAndMethods(),
             )
 
             else -> CredentialResponseEncryption.SupportedNotRequired(algsAndMethods())
