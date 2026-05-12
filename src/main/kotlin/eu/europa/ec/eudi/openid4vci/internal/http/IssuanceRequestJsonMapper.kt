@@ -33,19 +33,21 @@ import kotlin.time.toDuration
 @Serializable
 internal data class CredentialResponseEncryptionSpecTO(
     @SerialName("jwk") val jwk: JsonObject,
+    @SerialName("alg") val algorithm: String,
     @SerialName("enc") val encryptionMethod: String,
     @SerialName("zip") val compressionAlgorithm: String? = null,
-
 ) {
     companion object {
 
         fun from(responseEncryption: EncryptionSpec): CredentialResponseEncryptionSpecTO {
             val credentialEncryptionJwk =
                 Json.parseToJsonElement(responseEncryption.recipientKey.toPublicJWK().toString()).jsonObject
+            val credentialResponseEncryptionAlgorithm = responseEncryption.recipientKey.algorithm.name
             val credentialResponseEncryptionMethod = responseEncryption.encryptionMethod.toString()
             val encryptedPayloadCompressionAlgorithm = responseEncryption.compressionAlgorithm?.toString()
             return CredentialResponseEncryptionSpecTO(
                 credentialEncryptionJwk,
+                credentialResponseEncryptionAlgorithm,
                 credentialResponseEncryptionMethod,
                 encryptedPayloadCompressionAlgorithm,
             )
