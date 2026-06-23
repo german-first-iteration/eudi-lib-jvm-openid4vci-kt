@@ -227,7 +227,14 @@ internal class TokenEndpointClient(
                 authServerId,
                 abcaChallenge,
             )
-            val dpopProof = dPoPJwtFactory()?.createDPoPJwt(Htm.POST, tokenEndpoint, null, dpopNonce)
+            val dpopProof = dPoPJwtFactory()?.createDPoPJwt(
+                htm = Htm.POST,
+                htu = tokenEndpoint,
+                accessToken = null,
+                nonce = dpopNonce,
+                includeKeyAttestation = dpopNonce != null &&
+                    params[TokenEndpointForm.GRANT_TYPE_PARAM] == TokenEndpointForm.AUTHORIZATION_CODE_GRANT,
+            )
                 ?.getOrThrow()
                 ?.serialize()
 
