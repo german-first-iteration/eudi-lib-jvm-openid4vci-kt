@@ -72,10 +72,22 @@ data class KeyAttestationJWTClaims(
     @Required @SerialName(OpenId4VCISpec.ATTESTED_KEYS) val attestedKeys: AttestedKeys,
     @Required @SerialName(OpenId4VCISpec.KEY_STORAGE) val keyStorage: List<AttackPotentialResistance>,
     @Required @SerialName(OpenId4VCISpec.USER_AUTHENTICATION) val userAuthentication: List<AttackPotentialResistance>,
+    // BEGIN EUDI-changed: Temporarily treat certification/key_storage_status as optional to unblock
+    // PID issuance. Revert once the rWSCA backend emits these claims (TS 119 472-3).
+    /*
     @Required @SerialName(OpenId4VCISpec.CERTIFICATION) @Serializable(with = URLSerializer::class) val certification: URL,
+    */
+    @SerialName(OpenId4VCISpec.CERTIFICATION) @Serializable(with = URLSerializer::class) val certification: URL? = null,
+    // END EUDI-changed
     @SerialName(OpenId4VCISpec.NONCE) val nonce: Nonce? = null,
     @SerialName(TokenStatusListSpec.STATUS) val status: StatusClaim? = null,
+    // BEGIN EUDI-changed: Temporarily treat certification/key_storage_status as optional to unblock
+    // PID issuance. Revert once the rWSCA backend emits these claims (TS 119 472-3).
+    /*
     @Required @SerialName(TS3.KEY_STORAGE_STATUS) val keyStorageStatus: KeyStorageStatus,
+    */
+    @SerialName(TS3.KEY_STORAGE_STATUS) val keyStorageStatus: KeyStorageStatus? = null,
+    // END EUDI-changed
 ) {
     init {
         keyStorage.ensureLoAHigh { "keyStorage must contain [${AttackPotentialResistance.Iso18045High}]" }
