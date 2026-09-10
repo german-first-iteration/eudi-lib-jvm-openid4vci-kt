@@ -42,6 +42,37 @@ internal class JwtProofSigner(
         ).sign(claims)
 }
 
+/**
+ * Signs a single plain JWT proof, i.e. one whose JOSE header carries the binding key itself and no
+ * key attestation.
+ *
+ * FORK ADDITION -- restored from v0.11.x. See [ProofSpecification.JwtProofWithoutKeyAttestation].
+ */
+internal class PlainJwtProofSigner(
+    private val algorithm: JWSAlgorithm,
+    private val signOperation: SignOperation<JwtBindingKey>,
+) {
+    suspend fun sign(claims: JwtProofClaims): String =
+        JwtSigner<JwtProofClaims, JwtBindingKey>(
+            signOperation = signOperation,
+            algorithm = algorithm,
+            customizeHeader = { key -> jwtProofHeader(key) },
+        ).sign(claims)
+}
+
+/**
+ * FORK ADDITION -- restored from v0.11.x, removed by upstream #512 together with the plain JWT
+ * proof support it serves.
+ */
+private fun JsonObjectBuilder.jwtProofHeader(key: JwtBindingKey) {
+    put("typ", OpenId4VCISpec.JWT_PROOF_TYPE)
+    when (key) {
+        is JwtBindingKey.Did -> put(OpenId4VCISpec.JOSE_HEADER_KEY_ID, key.identity)
+        is JwtBindingKey.Jwk -> put(OpenId4VCISpec.JOSE_HEADER_JWK, key.jwk.publicJwkAsJsonElement())
+        is JwtBindingKey.X509 -> put(OpenId4VCISpec.JOSE_HEADER_X5C, key.chain.asJsonElement())
+    }
+}
+
 private fun JsonObjectBuilder.keyAttestationHeader(keyAttestation: KeyAttestationJWT, keyIndex: Int) {
     check(keyIndex in keyAttestation.attestedKeys.indices) {
         "Key index $keyIndex is out of bounds for attested keys: ${keyAttestation.attestedKeys.size}"

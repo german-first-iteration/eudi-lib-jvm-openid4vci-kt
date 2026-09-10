@@ -142,6 +142,29 @@ sealed interface ProofSpecification {
         val proofSignerProvider: suspend (Nonce?, PositiveDuration?) -> Signer<KeyAttestationJWT>,
     ) : ProofSpecification
 
+    /**
+     * Plain JWT proofs: one `openid4vci-proof+jwt` per credential-binding key, carrying the public
+     * key in the JOSE header (`jwk`, `kid` or `x5c`) and **no** key attestation.
+     *
+     * FORK ADDITION -- not present upstream. v0.12.0 removed plain JWT proofs (upstream #509, #512)
+     * so that only the EUDI/HAIP profile shapes remain: [JwtProof] (key attestation in the proof
+     * header) and [AttestationProof]. That makes the library unusable against issuers that
+     * advertise a `jwt` proof type without `key_attestations_required`, which is valid base
+     * OpenID4VCI and is what non-EUDI issuers publish. Upstream #589 tracks re-introducing this as
+     * an opt-in; this variant is the interim equivalent and should be dropped once that lands.
+     *
+     * Callers opt in explicitly by choosing this specification, so the stricter default behaviour
+     * of the library is unchanged. Note that a plain JWT proof only proves possession of a key; it
+     * carries no wallet-provider assertion about how that key is stored.
+     */
+    data class JwtProofWithoutKeyAttestation(
+        val proofSigners: List<Signer<JwtBindingKey>>,
+    ) : ProofSpecification {
+        init {
+            require(proofSigners.isNotEmpty()) { "At least one proof signer is required" }
+        }
+    }
+
     data class AttestationProof(
         val attestationProvider: suspend (Nonce?, PositiveDuration?) -> KeyAttestationJWT,
     ) : ProofSpecification

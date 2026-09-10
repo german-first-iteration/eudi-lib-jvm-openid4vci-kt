@@ -56,13 +56,13 @@ internal class RequestIssuanceImpl(
         val credentialConfiguration = credentialSupportedById(requestPayload.credentialConfigurationIdentifier)
         val selectedCredentialReusePolicy = selectCredentialReusePolicy(credentialConfiguration)
 
-        val (proof, proofsDpopNonce) = buildProof(
+        val (proofs, proofsDpopNonce) = buildProof(
             proofSpecification,
             selectedCredentialReusePolicy,
             requestPayload.credentialConfigurationIdentifier,
             grant,
         )
-        val credentialRequest = buildRequest(requestPayload, proof, credentialIdentifiers.orEmpty())
+        val credentialRequest = buildRequest(requestPayload, proofs, credentialIdentifiers.orEmpty())
 
         // Place the request
         // Use only resource-server nonce for DPoP proofs at the credential endpoint.
@@ -109,13 +109,13 @@ internal class RequestIssuanceImpl(
         selectedReusePolicy: EudiReusePolicy?,
         credentialConfigId: CredentialConfigurationIdentifier,
         grant: Grant,
-    ): Pair<Proof?, Nonce?> {
+    ): Pair<List<Proof>, Nonce?> {
         val credentialConfiguration = credentialSupportedById(credentialConfigId)
         config.proofs.ensureCompatibleWith(credentialConfiguration.proofTypesSupported)
         val proofRequirement = proofSpecification.ensureCompatibleWith(credentialConfiguration)
 
         return when (proofSpecification) {
-            is ProofSpecification.NoProof -> null to null
+            is ProofSpecification.NoProof -> emptyList<Proof>() to null
 
             is ProofSpecification.JwtProof -> {
                 val cNonceAndDPoPNonce = cNonce()
@@ -126,7 +126,21 @@ internal class RequestIssuanceImpl(
                     grant,
                     cNonceAndDPoPNonce?.cnonce,
                 )
-                proof to cNonceAndDPoPNonce?.dpopNonce
+                listOf(proof) to cNonceAndDPoPNonce?.dpopNonce
+            }
+
+            // FORK ADDITION -- plain JWT proofs, one per binding key, no key attestation.
+            // See ProofSpecification.JwtProofWithoutKeyAttestation.
+            is ProofSpecification.JwtProofWithoutKeyAttestation -> {
+                val cNonceAndDPoPNonce = cNonce()
+                val proofs = plainJwtProofs(
+                    proofRequirement as ProofTypeMeta.Jwt,
+                    proofSpecification,
+                    selectedReusePolicy,
+                    grant,
+                    cNonceAndDPoPNonce?.cnonce,
+                )
+                proofs to cNonceAndDPoPNonce?.dpopNonce
             }
 
             is ProofSpecification.AttestationProof -> {
@@ -137,7 +151,7 @@ internal class RequestIssuanceImpl(
                     selectedReusePolicy,
                     cNonceAndDPoPNonce?.cnonce,
                 )
-                proof to cNonceAndDPoPNonce?.dpopNonce
+                listOf(proof) to cNonceAndDPoPNonce?.dpopNonce
             }
         }
     }
@@ -156,6 +170,16 @@ internal class RequestIssuanceImpl(
             }
 
             is ProofSpecification.JwtProof -> {
+                val proofRequirement = proofTypesSupported[ProofType.JWT]
+                requireNotNull(proofRequirement) {
+                    "Credential configuration doesn't support JWT proofs."
+                }
+                check(proofRequirement is ProofTypeMeta.Jwt)
+                proofRequirement
+            }
+
+            // FORK ADDITION -- see ProofSpecification.JwtProofWithoutKeyAttestation.
+            is ProofSpecification.JwtProofWithoutKeyAttestation -> {
                 val proofRequirement = proofTypesSupported[ProofType.JWT]
                 requireNotNull(proofRequirement) {
                     "Credential configuration doesn't support JWT proofs."
@@ -257,6 +281,30 @@ internal class RequestIssuanceImpl(
         val attestationJwtAlg = header.algorithm
         ensure(attestationJwtAlg in spec.algorithms) {
             CredentialIssuanceError.ProofGenerationError.ProofTypeSigningAlgorithmNotSupported()
+        }
+    }
+
+    /**
+     * FORK ADDITION -- builds one plain JWT proof per binding key. Mirrors [jwtProof] but puts the
+     * binding key in the JOSE header instead of a key attestation, and therefore performs none of
+     * the key-attestation checks. See [ProofSpecification.JwtProofWithoutKeyAttestation].
+     */
+    private suspend fun plainJwtProofs(
+        proofRequirement: ProofTypeMeta.Jwt,
+        proofSpecification: ProofSpecification.JwtProofWithoutKeyAttestation,
+        selectedReusePolicy: EudiReusePolicy?,
+        grant: Grant,
+        cNonce: Nonce?,
+    ): List<Proof.Jwt> {
+        val proofSigners = proofSpecification.proofSigners
+        proofSigners.size.assertMatchesBatchIssuanceBatchSize(selectedReusePolicy)
+        val claims = jwtProofClaims(cNonce = cNonce, grant = grant)
+        return proofSigners.map { proofSigner ->
+            val joseAlg = proofSigner.javaAlgorithm.toSupportedJoseAlgorithm(proofRequirement)
+            val signedJwt = proofSigner.use { operation ->
+                PlainJwtProofSigner(joseAlg, operation).sign(claims)
+            }
+            Proof.Jwt(SignedJWT.parse(signedJwt))
         }
     }
 
@@ -369,13 +417,13 @@ internal class RequestIssuanceImpl(
 
     private fun buildRequest(
         requestPayload: IssuanceRequestPayload,
-        proof: Proof?,
+        proofs: List<Proof>,
         authorizationDetails: Map<CredentialConfigurationIdentifier, List<CredentialIdentifier>>,
     ): CredentialIssuanceRequest = when (requestPayload) {
         is IssuanceRequestPayload.ConfigurationBased -> {
             CredentialIssuanceRequest.byCredentialConfigurationId(
                 requestPayload.credentialConfigurationIdentifier,
-                proof,
+                proofs,
                 exchangeEncryptionSpecification,
             )
         }
@@ -384,7 +432,7 @@ internal class RequestIssuanceImpl(
             requestPayload.ensureAuthorized(authorizationDetails)
             CredentialIssuanceRequest.byCredentialId(
                 requestPayload.credentialIdentifier,
-                proof,
+                proofs,
                 exchangeEncryptionSpecification,
             )
         }
